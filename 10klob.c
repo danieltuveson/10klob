@@ -1,0 +1,446 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <locale.h>
+#include <string.h>
+#include <signal.h>
+#include <assert.h>
+#include <stdbool.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <event2/buffer.h>
+#include <event2/event.h>
+#include <event2/http.h>
+#include <event2/keyvalq_struct.h>
+#include <event2/buffer.h>
+#include "dbi.h"
+
+#define IGNORE(val) (void)val
+
+#define TEN_K 10000
+// #define RINGBUFFER_SIZE 10
+#define RINGBUFFER_SIZE 150
+#define OUTPUT_LINE_SIZE 200
+
+struct String {
+    size_t length; // Length of string (excludes null byte)
+    char *buffer; // Buffer *does* include null byte
+};
+
+struct RingBuffer {
+    size_t offset;
+    char **buffers;
+};
+
+// All global variables are defined here
+struct String global_index_html;
+struct String global_script_js;
+struct String global_style_css;
+
+DbiProgram global_prog;
+DbiRuntime global_dbi;
+struct RingBuffer global_ringbuffer;
+
+static void ringbuffer_printf(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(global_ringbuffer.buffers[global_ringbuffer.offset], OUTPUT_LINE_SIZE, fmt, args);
+    va_end(args);
+
+    printf("%d\n", global_ringbuffer.offset);
+    global_ringbuffer.offset++;
+    if (global_ringbuffer.offset >= RINGBUFFER_SIZE) {
+        global_ringbuffer.offset = 0;
+    }
+}
+
+enum DbiStatus print_ffi(DbiRuntime dbi)
+{
+    int argc = dbi_get_argc(dbi);
+    struct DbiObject **argv = dbi_get_argv(dbi);
+    for (int i = 0; i < argc; i++) {
+        if (argv[i]->type == DBI_INT) {
+            ringbuffer_printf("%d", argv[i]->bint);
+        } else {
+            printf("%s", argv[i]->bstr);
+            ringbuffer_printf("%s", argv[i]->bstr);
+        }
+    }
+    ringbuffer_printf("\n");
+    return DBI_STATUS_GOOD;
+}
+
+static void signal_cb(evutil_socket_t fd, short event, void *arg)
+{
+    IGNORE(event);
+    fprintf(stderr, "%s signal received\n", strsignal(fd));
+    event_base_loopbreak(arg);
+}
+
+// Most libevent http functions return 0 on success
+// Can use this for setup functions that we expect to succeed before continuing
+#define SETUP_SUCCESS(ev_setup_call) assert(ev_setup_call == 0)
+
+// Reduce boilerplate
+
+static void route_log(const char *fmt, ...)
+{
+    fprintf(stderr, "ROUTE: ");
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+}
+
+void route_404_notfound(struct evhttp_request *req, void *ctx)
+{
+    route_log("ROUTE: 404 - not found");
+    IGNORE(ctx);
+    struct evbuffer *reply = evbuffer_new();
+    struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
+    evhttp_add_header(headers, "Content-Type", "text/html; charset=utf-8");
+    evbuffer_add_printf(reply, "<h1>404 - Not Found</h1>");
+    evhttp_send_reply(req, HTTP_NOTFOUND, NULL, reply);
+    evbuffer_free(reply);
+}
+
+void route_index(struct evhttp_request *req, void *ctx)
+{
+    enum evhttp_cmd_type req_type = evhttp_request_get_command(req);
+    if (req_type != EVHTTP_REQ_GET) {
+        route_log("ROUTE: index - bad request type");
+        route_404_notfound(req, ctx);
+        return;
+    }
+    struct evbuffer *reply = evbuffer_new();
+    struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
+    evhttp_add_header(headers, "Content-Type", "text/html; charset=utf-8");
+    evbuffer_add_printf(reply, global_index_html.buffer);
+    evhttp_send_reply(req, HTTP_OK, NULL, reply);
+    evbuffer_free(reply);
+}
+
+void route_static(struct evhttp_request *req, void *ctx, char *mime_type, struct String *string)
+{
+    enum evhttp_cmd_type req_type = evhttp_request_get_command(req);
+    if (req_type != EVHTTP_REQ_GET) {
+        route_log("ROUTE: index - bad request type");
+        route_404_notfound(req, ctx);
+        return;
+    }
+
+    struct evbuffer *reply = evbuffer_new();
+    evbuffer_expand(reply, string->length);
+    evbuffer_add(reply, string->buffer, string->length);
+
+    char lenbuff[128];
+    snprintf(lenbuff, sizeof(lenbuff), "%lu", string->length);
+    struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
+    evhttp_add_header(headers, "Content-Type", mime_type);
+    evhttp_add_header(headers, "Content-Length", lenbuff);
+    evhttp_send_reply(req, HTTP_OK, "OK", reply);
+    evbuffer_free(reply);
+}
+
+void route_css(struct evhttp_request *req, void *ctx)
+{
+    route_static(req, ctx, "text/css; charset=utf-8", &global_style_css);
+}
+
+void route_js(struct evhttp_request *req, void *ctx)
+{
+    route_static(req, ctx, "text/javascript; charset=utf-8", &global_script_js);
+}
+
+// TODO: Make this have query parameter to specify which line to start with
+//       that way we don't have to send all 10k lines
+void route_get_code(struct evhttp_request *req, void *ctx)
+{
+    IGNORE(ctx);
+    struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
+    evhttp_add_header(headers, "Content-Type", "text/plain; charset=utf-8");
+
+    struct evbuffer *reply = evbuffer_new();
+    evbuffer_expand(reply, 100 * DBI_MAX_LINE_LENGTH);
+    for (int i = 1; i < 100; i++) {
+        // if (i < 10) printf("%s", dbi_get_line(global_prog, i));
+        evbuffer_add_printf(reply, "%s", dbi_get_line(global_prog, i));
+        if (i > 100) break;
+    }
+    evhttp_send_reply(req, HTTP_OK, NULL, reply);
+    evbuffer_free(reply);
+}
+
+#define MAX_FORM_QUERY_STRING 1024
+char post_body[MAX_FORM_QUERY_STRING];
+
+static struct evkeyvalq *setup_post(struct evhttp_request *req)
+{
+    // Get body
+    struct evbuffer *buf = evhttp_request_get_input_buffer(req);
+    memset(post_body, 0, MAX_FORM_QUERY_STRING-1);
+    ev_ssize_t readlen = evbuffer_copyout(buf, post_body, MAX_FORM_QUERY_STRING-1);
+    route_log("POST: readlen %d", (int) readlen);
+    route_log("POST: MAX-1 %d", MAX_FORM_QUERY_STRING-1);
+    if (readlen == -1 || readlen == MAX_FORM_QUERY_STRING-1) {
+        route_log("POST failure: could not read query");
+        return NULL;
+    }
+    route_log("post_body: %s", post_body);
+
+    // Read parameters from post_body
+    struct evkeyvalq *params = malloc(sizeof(*params));
+    if (evhttp_parse_query_str(post_body, params) == -1) {
+        route_log("POST failure: could not parse query parameters");
+        free(params);
+        return NULL;
+    }
+    return params;
+}
+
+void route_post_code_free(struct evkeyvalq *params, struct evbuffer *reply)
+{
+    if (params) {
+        evhttp_clear_headers(params);
+        free(params);
+    }
+    if (reply) {
+        evbuffer_free(reply);
+    }
+}
+
+void route_post_code(struct evhttp_request *req, void *ctx)
+{
+    struct evbuffer *reply = evbuffer_new();
+    struct evkeyvalq *params = setup_post(req);
+    if (!params) {
+        route_404_notfound(req, ctx);
+        goto exit;
+    }
+    const char *line = evhttp_find_header(params, "line");
+    struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
+    evhttp_add_header(headers, "Content-Type", "text/plain; charset=utf-8");
+    if (!line) {
+        route_log("POST failure: could not find header parameter 'line'");
+        evbuffer_add_printf(reply, "http request required query parameter 'line'");
+        evhttp_send_reply(req, HTTP_BADREQUEST, NULL, reply);
+    } else {
+    // IGNORE(arg);
+    // struct evbuffer *evb = NULL;
+    // struct evhttp_uri *decoded = NULL;
+    // struct stat st;
+    // int fd = -1;
+    // const char *static_dir = ".";
+
+    // enum evhttp_cmd_type cmd = evhttp_request_get_command(req);
+    // if (cmd != EVHTTP_REQ_GET && cmd != EVHTTP_REQ_HEAD) {
+    //     return;
+    // }
+
+    // /* Decode the URI */
+    // decoded = evhttp_uri_parse(evhttp_request_get_uri(req));
+    // if (!decoded) {
+    //     evhttp_send_error(req, HTTP_BADREQUEST, 0);
+    //     return;
+    // }
+        route_log("POST: line: %s", line);
+        bool ret = dbi_compile_string(global_prog, (char *)line);
+        evbuffer_add_printf(reply, "missing parameter 'line'");
+        evhttp_send_reply(req, HTTP_MOVETEMP, NULL, NULL);
+    }
+exit:
+    route_post_code_free(params, reply);
+}
+
+// void route_post_code(struct evhttp_request *req, void *ctx)
+// {
+//     IGNORE(ctx);
+//     struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
+//     evhttp_add_header(headers, "Content-Type", "text/plain; charset=utf-8");
+// }
+
+void route_stdout(struct evhttp_request *req, void *ctx)
+{
+    enum evhttp_cmd_type req_type = evhttp_request_get_command(req);
+    if (req_type != EVHTTP_REQ_GET) {
+        route_log("ROUTE: stdout - bad request type");
+        route_404_notfound(req, ctx);
+        return;
+    }
+
+    struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
+    evhttp_add_header(headers, "Content-Type", "text/plain; charset=utf-8");
+
+    struct evbuffer *reply = evbuffer_new();
+    evbuffer_expand(reply, RINGBUFFER_SIZE * OUTPUT_LINE_SIZE);
+
+    for (int i = (int)global_ringbuffer.offset; i >= 0; i--) {
+        evbuffer_add_printf(reply, "%s", global_ringbuffer.buffers[i]);
+    }
+    for (int i = RINGBUFFER_SIZE - 1; i > ((int)global_ringbuffer.offset); i--) {
+        evbuffer_add_printf(reply, "%s", global_ringbuffer.buffers[i]);
+    }
+    evhttp_send_reply(req, HTTP_OK, NULL, reply);
+    evbuffer_free(reply);
+}
+
+void route_run(struct evhttp_request *req, void *ctx)
+{
+    enum evhttp_cmd_type req_type = evhttp_request_get_command(req);
+    if (req_type != EVHTTP_REQ_POST) {
+        route_log("ROUTE: run - bad request type");
+        route_404_notfound(req, ctx);
+        return;
+    }
+
+    struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
+    evhttp_add_header(headers, "Content-Type", "text/plain; charset=utf-8");
+
+    struct evbuffer *reply = evbuffer_new();
+
+    printf("running program\n");
+    global_dbi = dbi_runtime_new();
+    enum DbiStatus ret = dbi_run(global_dbi, global_prog);
+    if (ret == DBI_STATUS_ERROR) {
+        ringbuffer_printf("%s", dbi_strerror());
+        evbuffer_add_printf(reply, "%s", dbi_strerror());
+    } else {
+        evbuffer_add_printf(reply, "%s", "all good");
+    }
+    dbi_runtime_free(global_dbi);
+
+    evhttp_send_reply(req, HTTP_OK, NULL, reply);
+    evbuffer_free(reply);
+    printf("done\n");
+}
+
+void route_code(struct evhttp_request *req, void *ctx)
+{
+    enum evhttp_cmd_type req_type = evhttp_request_get_command(req);
+    if (req_type == EVHTTP_REQ_GET) {
+        route_get_code(req, ctx);
+    } else if (req_type == EVHTTP_REQ_POST) {
+        route_post_code(req, ctx);
+    } else {
+        route_log("ROUTE: code - bad request type");
+        route_404_notfound(req, ctx);
+        return;
+    }
+}
+
+void load_static_file(struct String *string, char *filename)
+{
+    FILE *file = fopen(filename, "r");
+
+    // Get file size
+    fseek(file, 0L, SEEK_END);
+    long len = ftell(file);
+    assert(len > 0);
+    rewind(file);
+
+    // Read file
+    char *buff = calloc(len + 1, 1);
+    long fread_len = fread(buff, 1, len, file);
+    assert(fread_len == len);
+    fclose(file);
+
+    string->length = (size_t)len;
+    string->buffer = buff;
+}
+
+void free_static_file(struct String *string)
+{
+    free(string->buffer);
+}
+
+void ringbuffer_init(struct RingBuffer *ringbuffer)
+{
+    ringbuffer->offset = 0;
+    ringbuffer->buffers = calloc(RINGBUFFER_SIZE, sizeof(*ringbuffer->buffers));
+    for (int i = 0; i < RINGBUFFER_SIZE; i++) {
+        ringbuffer->buffers[i] = calloc(OUTPUT_LINE_SIZE, 1);
+    }
+}
+
+void ringbuffer_free(struct RingBuffer *ringbuffer)
+{
+    for (int i = 0; i < RINGBUFFER_SIZE; i++) {
+        free(ringbuffer->buffers[i]);
+    }
+    free(ringbuffer->buffers);
+}
+
+int main(void)
+{ 
+    setlocale(LC_ALL, "en_US.UTF-8");
+
+    // ***************************************************
+    // ****************** get HTML file ******************
+    // ***************************************************
+    load_static_file(&global_index_html, "index.html");
+    load_static_file(&global_script_js,  "script.js");
+    load_static_file(&global_style_css,  "style.css");
+
+    // ***************************************************
+    // ******************* BASIC setup *******************
+    // ***************************************************
+    global_prog = dbi_program_new();
+    dbi_register_command(global_prog, "PRINT", print_ffi, -1);
+    bool ret = dbi_compile_file(global_prog, "code.bas");
+    if (!ret) {
+        printf("%s\n", dbi_strerror());
+    }
+    assert(ret);
+    ringbuffer_init(&global_ringbuffer);
+
+    // ***************************************************
+    // ***************** libevent setup ******************
+    // ***************************************************
+    ev_uint16_t http_port = 8080;
+    char *http_addr = "0.0.0.0";
+    struct event_base *base;
+    struct evhttp *http_server;
+    struct event *sig_int;
+
+    base = event_base_new();
+
+    // Setup
+    http_server = evhttp_new(base);
+    evhttp_set_allowed_methods(http_server, EVHTTP_REQ_GET | EVHTTP_REQ_POST);
+    SETUP_SUCCESS(evhttp_bind_socket(http_server, http_addr, http_port));
+
+    // Top level routes
+    evhttp_set_cb(http_server, "/",          route_index,  NULL);
+    evhttp_set_cb(http_server, "/code",      route_code,   NULL);
+    evhttp_set_cb(http_server, "/run",       route_run,    NULL);
+    evhttp_set_cb(http_server, "/stdout",    route_stdout, NULL);
+    evhttp_set_cb(http_server, "/script.js", route_js,     NULL);
+    evhttp_set_cb(http_server, "/style.css", route_css,    NULL);
+    // evhttp_set_cb(http_server, "/post", route_new_survey, NULL);
+    // evhttp_set_gencb(http_server, send_file_to_user, NULL);
+
+    sig_int = evsignal_new(base, SIGINT, signal_cb, base);
+    event_add(sig_int, NULL);
+
+    printf("Listening requests on http://%s:%d\n", http_addr, http_port);
+    event_base_dispatch(base);
+
+    // ***************************************************
+    // ********************* Cleanup *********************
+    // ***************************************************
+    free_static_file(&global_index_html);
+    free_static_file(&global_script_js);
+    free_static_file(&global_style_css);
+
+    // BASIC frees
+    dbi_program_free(global_prog);
+    ringbuffer_free(&global_ringbuffer);
+
+    // libevent frees
+    evhttp_free(http_server);
+    event_free(sig_int);
+    event_base_free(base);
+}
+

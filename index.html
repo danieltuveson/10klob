@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <title>10,000 Lines of Tiny BASIC</title>
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+        <div id="help"  class="splashscreen" hidden>
+            <pre>-------------------------------------------------------------------------------------------------
+ command |  description                                         |  usage
+---------+------------------------------------------------------+--------------------------------
+ PRINT   |  print concatenated expression list                  |  PRINT expr-list
+ IF      |  conditionally execute statement                     |  IF expr relop expr THEN stmt
+ GOTO    |  jump to given line number                           |  GOTO expr
+ LET     |  set variable to expression                          |  LET var = expr
+ GOSUB   |  jump to given line number                           |  GOSUB expr
+ RETURN  |  return to the line following the last GOSUB called  |  RETURN
+ RUN     |  execute loaded code                                 |  RUN
+ END     |  end execution of program                            |  END
+ REM     |  adds a comment                                      |  REM comment
+ QUOTE   |  an inspirational quote                              |  QUOTE
+ HELP    |  you just ran this                                   |  HELP
+-------------------------------------------------------------------------------------------------
+ line         ::=  number stmt (: stmt)* NL | stmt (: stmt)* NL
+ stmt         ::=  see 'usage' above
+ cmd          ::=  one of the commands above
+ expr-list    ::=  expr (, expr)*
+ var-list     ::=  var (, var)*
+ expr         ::=  term ((+|-) term)*
+ term         ::=  factor ((*|/) factor)*
+ factor       ::=  var | number | string | (expr)
+ var          ::=  A | B | C ... | Y | Z
+ number       ::=  (+|-|eps) digit digit*
+ digit        ::=  0 | 1 | 2 | 3 | ... | 8 | 9
+ relop        ::=  &lt; (&gt;eps) | &gt; (&lt;|=|eps) | =
+ string       ::=  " string-char* "
+ string-char  ::=  non-quote, non-newline character
+ comment      ::=  non-newline character
+ eps          ::=  nothing
+-------------------------------------------------------------------------------------------------
+ This BASIC interpreter is loosely based on Dennis Allison's Tiny BASIC
+ Most of the above grammar is taken from page 9 of Dr. Dobb's Journal:
+ https://archive.org/download/dr_dobbs_journal_vol_01/dr_dobbs_journal_vol_01.pdf
+ Source code is available at https://github.com/danieltuveson/dbi
+ Happy hacking!
+ 
+ [press any key to continue]
+            </pre>
+        </div>
+        <div id="quote" class="splashscreen" hidden>
+            <p>
+            “It is practically impossible to teach good programming to students<br>
+            that have had a prior exposure to BASIC: as potential programmers<br>
+            they are mentally mutilated beyond hope of regeneration.”<br>
+            ― Edsger Dijkstra<br>
+            </p>
+        </div>
+        <div id="intro" class="splashscreen">
+            <div>
+            <p>Run 'help' for a list of commands</p>
+            <p>[press any key to continue]</p>
+            </div>
+        </div>
+        <h1 id="title">10,000 Lines of Tiny BASIC</h2>
+        <div class="container">
+            <div id="code" class="pane" tabindex="-1">
+                <pre tabindex="-1"></pre>
+            </div>
+            <div id="stdout" class="pane" tabindex="-1">
+                <pre tabindex="-1">hi</pre>
+            </div>
+            <div id="stdin-pane" tabindex="-1">
+                <span>&gt; </span>
+                <span contenteditable id="stdin" type="text" spellcheck="false"></span><span id="cursor">█</span>
+            </div>
+        </div>
+        <script src="script.js"></script>
+    </body>
+</html>
+
