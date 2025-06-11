@@ -101,6 +101,15 @@ h1 {
     }
 }
 
+@media (width <= 700px) {
+    .pane {
+        height: 30vh;
+    }
+    h1 {
+        font-size: 20px;
+    }
+}
+
 #stdout {
     margin: 0;
     display: flex;
@@ -126,4 +135,9 @@ span:focus {
     outline: none;
     border: 0px;
 }
+
+#stdin-pane {
+    height: 20px;
+}
+
 
