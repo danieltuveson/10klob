@@ -4,7 +4,6 @@ let introScreen = true;
 let helpScreen = false;
 let quoteScreen = false;
 
-let showCursor = true;
 let cursor = document.getElementById("cursor");
 
 let cursorInterval = setInterval(toggleCursor, 500);
@@ -55,12 +54,8 @@ addEventListener("load", async function(event) {
 
 // TODO: Make it so fake cursor follows real one if user uses arrow keys to navigate
 function toggleCursor(e) {
-    if (showCursor) {
-        cursor.removeAttribute("hidden");
-    } else {
-        cursor.setAttribute("hidden", "true");
-    }
-    showCursor = !showCursor;
+    // Instead of using "hidden" we have to use this stupid hack to make it work on android
+    cursor.classList.toggle("hide");
 }
 
 addEventListener("keypress", async function(event) {
