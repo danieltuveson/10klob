@@ -15,14 +15,24 @@
 #include <event2/buffer.h>
 #include "dbi.h"
 
+#ifndef DEBUG
 #define DEBUG 1
+#endif
 
 #define IGNORE(val) (void)val
 
+#ifndef TEN_K
 #define TEN_K 10000
+#endif
+
+#ifndef RINGBUFFER_SIZE
 // #define RINGBUFFER_SIZE 10
 #define RINGBUFFER_SIZE 150
+#endif
+
+#ifndef OUTPUT_LINE_SIZE
 #define OUTPUT_LINE_SIZE 200
+#endif
 
 struct String {
     size_t length; // Length of string (excludes null byte)
