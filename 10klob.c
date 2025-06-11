@@ -72,7 +72,7 @@ enum DbiStatus print_ffi(DbiRuntime dbi)
 {
     int argc = dbi_get_argc(dbi);
     struct DbiObject **argv = dbi_get_argv(dbi);
-    for (int i = 0; i < argc; i++) {
+    for (int i = argc - 1; i >= 0; i--) {
         if (argv[i]->type == DBI_INT) {
             ringbuffer_printf("%d", argv[i]->bint);
         } else {

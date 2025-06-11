@@ -1,24 +1,20 @@
-'use strict';
+"use strict";
 
 let introScreen = true;
 let helpScreen = false;
 let quoteScreen = false;
 
-addEventListener('load', async function(event) {
-    updateCode(1);
-    updateStdout();
-    forceTerminalFocus();
-});
+let showCursor = true;
+let cursor = document.getElementById("cursor");
 
+let cursorInterval = setInterval(toggleCursor, 500);
 // let codeInterval = setInterval(updateCode, 1000);
 // let stdoutInterval = setInterval(updateStdout, 1000);
 
 async function updateCode(lineno) {
-    let code = document.querySelector('#code');
+    let code = document.querySelector("#code");
     console.log("lineno:", lineno);
-    const response = await fetch(`./code?lineno=${lineno}`, {
-        method: 'GET',
-    });
+    const response = await fetch(`./code?lineno=${lineno}`, { method: "GET" });
     let output = await decodeChunks(response);
     if (response.ok) {
         writeOutputToDiv(code, output);
@@ -28,10 +24,8 @@ async function updateCode(lineno) {
 }
 
 async function updateStdout() {
-    let stdout = document.querySelector('#stdout');
-    const response = await fetch('./stdout', {
-        method: 'GET',
-    });
+    let stdout = document.querySelector("#stdout");
+    const response = await fetch("./stdout", { method: "GET" });
     let output = await decodeChunks(response);
     if (response.ok) {
         writeOutputToDiv(stdout, output);
@@ -41,101 +35,103 @@ async function updateStdout() {
 }
 
 function writeOutputToDiv(node, output) {
-    node.innerHTML = '';
-    output.split('\n').forEach(function (line) {
-        let lineNode = document.createElement('pre');
+    node.innerHTML = "";
+    output.split("\n").forEach(function (line) {
+        let lineNode = document.createElement("pre");
         lineNode.textContent = line;
         node.appendChild(lineNode);
     });
 }
-
-addEventListener('onclick', function (e) {
+addEventListener("click", function (e) {
+    hideSplashpages();
     forceTerminalFocus();
 });
 
-let showCursor = true;
-let cursor = document.getElementById('cursor');
+addEventListener("load", async function(event) {
+    await updateCode(1);
+    await updateStdout();
+    forceTerminalFocus();
+});
 
 // TODO: Make it so fake cursor follows real one if user uses arrow keys to navigate
 function toggleCursor(e) {
     if (showCursor) {
-        cursor.removeAttribute('hidden');
+        cursor.removeAttribute("hidden");
     } else {
-        cursor.setAttribute('hidden', 'true');
+        cursor.setAttribute("hidden", "true");
     }
     showCursor = !showCursor;
 }
 
-let cursorInterval = setInterval(toggleCursor, 500);
-
-addEventListener('keypress', async function(event) {
+addEventListener("keypress", async function(event) {
     if (introScreen || helpScreen || quoteScreen) {
         event.preventDefault();
-        document.getElementById('intro').setAttribute('hidden', 'true');
-        introScreen = false;
-        document.getElementById('help').setAttribute('hidden', 'true');
-        helpScreen = false;
-        document.getElementById('quote').setAttribute('hidden', 'true');
-        quoteScreen = false;
+        hideSplashpages();
         return;
     }
-    let cursor = document.getElementById('cursor');
-    cursor.removeAttribute('hidden');
+    cursor.removeAttribute("hidden");
     clearInterval(cursorInterval);
     cursorInterval = setInterval(toggleCursor, 500);
 
     let key = event.key.toLowerCase();
-    if (key === 'enter') {
+    if (key === "enter") {
         event.preventDefault();
         handleCommand();
     }
     forceTerminalFocus();
 });
 
+function hideSplashpages() {
+    document.getElementById("intro").setAttribute("hidden", "true");
+    introScreen = false;
+    document.getElementById("help").setAttribute("hidden", "true");
+    helpScreen = false;
+    document.getElementById("quote").setAttribute("hidden", "true");
+    quoteScreen = false;
+}
+
 async function handleCommand() {
-    let elt = document.getElementById('stdin');
+    let elt = document.getElementById("stdin");
     let text = decodeHtml(elt.innerHTML);
     console.log(text);
-    elt.innerHTML = '';
+    elt.innerHTML = "";
 
     // In-browser commands
     let cleanText = text.trim().toLowerCase();
     let lineno = parseInt(text);
-    if (cleanText === 'help') {
-        let help = document.getElementById('help');
-        help.removeAttribute('hidden');
+    console.log(lineno);
+    if (cleanText === "help") {
+        let help = document.getElementById("help");
+        help.removeAttribute("hidden");
         helpScreen = true;
-    } else if (cleanText === 'quote') {
-        let quote = document.getElementById('quote');
-        quote.removeAttribute('hidden');
+    } else if (cleanText === "quote") {
+        let quote = document.getElementById("quote");
+        quote.removeAttribute("hidden");
         quoteScreen = true;
-    } else if (cleanText === 'run') {
-        let response = await fetch('./run', { method: 'POST', });
+    } else if (cleanText === "run") {
+        let response = await fetch("./run", { method: "POST" });
         console.log(await decodeChunks(response));
         await updateStdout();
     } else if (!isNaN(lineno)) {
-        const response = await fetch('./code', {
-            method: 'POST',
+        const response = await fetch("./code", {
+            method: "POST",
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                "Content-Type": "application/x-www-form-urlencoded"
             },
-            // Don't want to lower case text, in case there's a string in it
-            body: new URLSearchParams({ 'line': text })
+            // Don't want to lower case text, in case there"s a string in it
+            body: new URLSearchParams({ "line": text })
         });
         await decodeChunks(response);
 
-        // Want to make sure to display lines above, if they exist, that way the user has
-        // context for the surrounding code
-        if (lineno >= 15) {
+        if (lineno < 15) {
+            lineno = 1;
+        } else {
+            // Want to make sure to display lines above, if they exist, that way the user has
+            // context for the surrounding code
             lineno -= 8;
         }
         await updateCode(lineno);
     }
-}
-
-function forceTerminalFocus() {
-    let elt = document.getElementById('stdin');
-    elt.focus();
 }
 
 async function decodeChunks(response) {
@@ -146,26 +142,31 @@ async function decodeChunks(response) {
         decoded = decoder.decode(chunk);
         lines.push(decoded);
     }
-    let output = lines.join('');
+    let output = lines.join("");
 
     let i = 0;
-    for (let line of output.split('\n')) {
+    for (let line of output.split("\n")) {
         for (let j = 0; j < line.length; j++) {
             // if (line[j]
         }
         if (i < 10) {
             console.log(line);
         } else {
-            console.log('...');
+            console.log("...");
             break;
         }
         i++;
     }
-    return lines.join('');
+    return lines.join("");
+}
+
+function forceTerminalFocus() {
+    let elt = document.getElementById("stdin");
+    elt.focus();
 }
 
 function decodeHtml(html) {
-    var txt = document.createElement('textarea');
+    var txt = document.createElement("textarea");
     txt.innerHTML = html;
     return txt.value;
 }
