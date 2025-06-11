@@ -1,5 +1,5 @@
-0001 print "Hello, internet!"
-0002 end
+0001 print "Hello, internet!" : let x = x + 1
+0002 if x < 100 then goto 1 : end
 0003 REM no one has changed this line yet
 0004 REM no one has changed this line yet
 0005 REM no one has changed this line yet

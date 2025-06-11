@@ -15,6 +15,8 @@
 #include <event2/buffer.h>
 #include "dbi.h"
 
+#define DEBUG 1
+
 #define IGNORE(val) (void)val
 
 #define TEN_K 10000
@@ -40,6 +42,7 @@ struct String global_style_css;
 DbiProgram global_prog;
 DbiRuntime global_dbi;
 struct RingBuffer global_ringbuffer;
+FILE *global_command_log;
 
 static void ringbuffer_printf(const char *fmt, ...)
 {
@@ -48,7 +51,7 @@ static void ringbuffer_printf(const char *fmt, ...)
     vsnprintf(global_ringbuffer.buffers[global_ringbuffer.offset], OUTPUT_LINE_SIZE, fmt, args);
     va_end(args);
 
-    printf("%d\n", global_ringbuffer.offset);
+    // printf("%d\n", global_ringbuffer.offset);
     global_ringbuffer.offset++;
     if (global_ringbuffer.offset >= RINGBUFFER_SIZE) {
         global_ringbuffer.offset = 0;
@@ -63,7 +66,7 @@ enum DbiStatus print_ffi(DbiRuntime dbi)
         if (argv[i]->type == DBI_INT) {
             ringbuffer_printf("%d", argv[i]->bint);
         } else {
-            printf("%s", argv[i]->bstr);
+            // printf("%s", argv[i]->bstr);
             ringbuffer_printf("%s", argv[i]->bstr);
         }
     }
@@ -154,8 +157,19 @@ void route_js(struct evhttp_request *req, void *ctx)
     route_static(req, ctx, "text/javascript; charset=utf-8", &global_script_js);
 }
 
-// TODO: Make this have query parameter to specify which line to start with
-//       that way we don't have to send all 10k lines
+void route_get_free(struct evbuffer *buff, struct evhttp_uri *uri, struct evkeyvalq *params)
+{
+    if (buff) {
+        free(buff);
+    }
+    if (uri) {
+        evhttp_uri_free(uri);
+    }
+    if (params) {
+        evhttp_clear_headers(params);
+    }
+}
+
 void route_get_code(struct evhttp_request *req, void *ctx)
 {
     IGNORE(ctx);
@@ -163,18 +177,52 @@ void route_get_code(struct evhttp_request *req, void *ctx)
     evhttp_add_header(headers, "Content-Type", "text/plain; charset=utf-8");
 
     struct evbuffer *reply = evbuffer_new();
-    evbuffer_expand(reply, 100 * DBI_MAX_LINE_LENGTH);
-    for (int i = 1; i < 100; i++) {
-        // if (i < 10) printf("%s", dbi_get_line(global_prog, i));
-        evbuffer_add_printf(reply, "%s", dbi_get_line(global_prog, i));
-        if (i > 100) break;
+    const char *uri = evhttp_request_get_uri(req);
+    struct evhttp_uri *decoded = evhttp_uri_parse(uri);
+    const char *query = evhttp_uri_get_query(decoded);
+
+    struct evkeyvalq params;
+    evhttp_parse_query_str(query, &params);
+    const char *lineno_str = evhttp_find_header(&params, "lineno");
+
+    if (!lineno_str) {
+        route_log("GET failure: could not find header parameter 'lineno' in %s", query);
+        evbuffer_add_printf(reply, "http request requires query parameter 'lineno'");
+        evhttp_send_reply(req, HTTP_BADREQUEST, NULL, reply);
+    } else {
+        int lineno = atoi(lineno_str);
+        if (lineno < 1 || lineno >= TEN_K) {
+            const char *err = "GET failure: lineno '%s' is invalid";
+            route_log(err, lineno_str);
+            evbuffer_add_printf(reply, err, lineno_str);
+            evhttp_send_reply(req, HTTP_BADREQUEST, NULL, reply);
+        } else {
+            route_log("GET: lineno: %d", lineno);
+            evbuffer_expand(reply, 150 * DBI_MAX_LINE_LENGTH);
+            for (int i = lineno; i < TEN_K; i++) {
+                char *line = dbi_get_line(global_prog, i);
+                evbuffer_add_printf(reply, "%s\n", line);
+                if (i > lineno + 100) break;
+            }
+            evhttp_send_reply(req, HTTP_OK, NULL, reply);
+        }
     }
-    evhttp_send_reply(req, HTTP_OK, NULL, reply);
-    evbuffer_free(reply);
+    route_get_free(reply, decoded, &params);
 }
 
 #define MAX_FORM_QUERY_STRING 1024
 char post_body[MAX_FORM_QUERY_STRING];
+
+void route_post_code_free(struct evkeyvalq *params, struct evbuffer *reply)
+{
+    if (params) {
+        evhttp_clear_headers(params);
+        free(params);
+    }
+    if (reply) {
+        evbuffer_free(reply);
+    }
+}
 
 static struct evkeyvalq *setup_post(struct evhttp_request *req)
 {
@@ -200,17 +248,6 @@ static struct evkeyvalq *setup_post(struct evhttp_request *req)
     return params;
 }
 
-void route_post_code_free(struct evkeyvalq *params, struct evbuffer *reply)
-{
-    if (params) {
-        evhttp_clear_headers(params);
-        free(params);
-    }
-    if (reply) {
-        evbuffer_free(reply);
-    }
-}
-
 void route_post_code(struct evhttp_request *req, void *ctx)
 {
     struct evbuffer *reply = evbuffer_new();
@@ -227,39 +264,20 @@ void route_post_code(struct evhttp_request *req, void *ctx)
         evbuffer_add_printf(reply, "http request required query parameter 'line'");
         evhttp_send_reply(req, HTTP_BADREQUEST, NULL, reply);
     } else {
-    // IGNORE(arg);
-    // struct evbuffer *evb = NULL;
-    // struct evhttp_uri *decoded = NULL;
-    // struct stat st;
-    // int fd = -1;
-    // const char *static_dir = ".";
-
-    // enum evhttp_cmd_type cmd = evhttp_request_get_command(req);
-    // if (cmd != EVHTTP_REQ_GET && cmd != EVHTTP_REQ_HEAD) {
-    //     return;
-    // }
-
-    // /* Decode the URI */
-    // decoded = evhttp_uri_parse(evhttp_request_get_uri(req));
-    // if (!decoded) {
-    //     evhttp_send_error(req, HTTP_BADREQUEST, 0);
-    //     return;
-    // }
         route_log("POST: line: %s", line);
         bool ret = dbi_compile_string(global_prog, (char *)line);
-        evbuffer_add_printf(reply, "missing parameter 'line'");
-        evhttp_send_reply(req, HTTP_MOVETEMP, NULL, NULL);
+        if (!ret) {
+            printf("%s", dbi_strerror());
+            evbuffer_add_printf(reply, "%s", dbi_strerror());
+        } else {
+            fprintf(global_command_log, "%s\n", line);
+            evbuffer_add_printf(reply, "all gucci");
+        }
+        evhttp_send_reply(req, HTTP_OK, NULL, reply);
     }
 exit:
     route_post_code_free(params, reply);
 }
-
-// void route_post_code(struct evhttp_request *req, void *ctx)
-// {
-//     IGNORE(ctx);
-//     struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
-//     evhttp_add_header(headers, "Content-Type", "text/plain; charset=utf-8");
-// }
 
 void route_stdout(struct evhttp_request *req, void *ctx)
 {
@@ -388,17 +406,30 @@ int main(void)
     // ***************************************************
     global_prog = dbi_program_new();
     dbi_register_command(global_prog, "PRINT", print_ffi, -1);
+#if DEBUG
+    bool ret = dbi_compile_file(global_prog, "init.bas");
+#else
     bool ret = dbi_compile_file(global_prog, "code.bas");
+#endif
+
     if (!ret) {
         printf("%s\n", dbi_strerror());
     }
     assert(ret);
     ringbuffer_init(&global_ringbuffer);
 
+    // Command log
+    global_command_log = fopen("command_log.bas", "a");
+    assert(global_command_log);
+
     // ***************************************************
     // ***************** libevent setup ******************
     // ***************************************************
+#if DEBUG
     ev_uint16_t http_port = 8080;
+#else 
+    ev_uint16_t http_port = 80;
+#endif
     char *http_addr = "0.0.0.0";
     struct event_base *base;
     struct evhttp *http_server;
@@ -426,6 +457,20 @@ int main(void)
 
     printf("Listening requests on http://%s:%d\n", http_addr, http_port);
     event_base_dispatch(base);
+
+    
+    // ***************************************************
+    // ******************* Save output *******************
+    // ***************************************************
+    FILE *sav = fopen("code.bas", "w+");
+    for (int i = 1; i < TEN_K; i++) {
+        char *line = dbi_get_line(global_prog, i);
+        fprintf(sav, "%s\n", line);
+    }
+    fclose(sav);
+
+    // Close logger
+    fclose(global_command_log);
 
     // ***************************************************
     // ********************* Cleanup *********************

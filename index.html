@@ -4,74 +4,162 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
-        <title>10,000 Lines of Tiny BASIC</title>
+        <title>10,000 Lines of BASIC</title>
         <link rel="stylesheet" href="style.css">
     </head>
     <body>
         <div id="help"  class="splashscreen" hidden>
-            <pre>-------------------------------------------------------------------------------------------------
- command |  description                                         |  usage
----------+------------------------------------------------------+--------------------------------
- PRINT   |  print concatenated expression list                  |  PRINT expr-list
- IF      |  conditionally execute statement                     |  IF expr relop expr THEN stmt
- GOTO    |  jump to given line number                           |  GOTO expr
- LET     |  set variable to expression                          |  LET var = expr
- GOSUB   |  jump to given line number                           |  GOSUB expr
- RETURN  |  return to the line following the last GOSUB called  |  RETURN
- RUN     |  execute loaded code                                 |  RUN
- END     |  end execution of program                            |  END
- REM     |  adds a comment                                      |  REM comment
- QUOTE   |  an inspirational quote                              |  QUOTE
- HELP    |  you just ran this                                   |  HELP
--------------------------------------------------------------------------------------------------
- line         ::=  number stmt (: stmt)* NL | stmt (: stmt)* NL
- stmt         ::=  see 'usage' above
- cmd          ::=  one of the commands above
- expr-list    ::=  expr (, expr)*
- var-list     ::=  var (, var)*
- expr         ::=  term ((+|-) term)*
- term         ::=  factor ((*|/) factor)*
- factor       ::=  var | number | string | (expr)
- var          ::=  A | B | C ... | Y | Z
- number       ::=  (+|-|eps) digit digit*
- digit        ::=  0 | 1 | 2 | 3 | ... | 8 | 9
- relop        ::=  &lt; (&gt;eps) | &gt; (&lt;|=|eps) | =
- string       ::=  " string-char* "
- string-char  ::=  non-quote, non-newline character
- comment      ::=  non-newline character
- eps          ::=  nothing
--------------------------------------------------------------------------------------------------
- This BASIC interpreter is loosely based on Dennis Allison's Tiny BASIC
- Most of the above grammar is taken from page 9 of Dr. Dobb's Journal:
- https://archive.org/download/dr_dobbs_journal_vol_01/dr_dobbs_journal_vol_01.pdf
- Source code is available at https://github.com/danieltuveson/dbi
- Happy hacking!
- 
- [press any key to continue]
-            </pre>
+            <div id="little-help" >
+                <pre>-------------------------------------</pre>
+                <pre> With the exception of RUN, HELP,    </pre>
+                <pre> and QUOTE, all commands must be     </pre>
+                <pre> prefixed with a line number.        </pre>
+                <pre>-------------------------------------</pre>
+                <pre> usage                               </pre>
+                <pre> description                         </pre>
+                <pre>-------------------------------------</pre>
+                <pre> PRINT expr-list                     </pre>
+                <pre> print concatenated expression list  </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> IF expr relop expr THEN stmt        </pre>
+                <pre> conditionally execute statement     </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> GOTO expr                           </pre>
+                <pre> jump to given line number           </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> RETURN                              </pre>
+                <pre> return to the line following the    </pre>
+                <pre> last GOSUB called                   </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> RUN                                 </pre>
+                <pre> execute loaded code                 </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> END                                 </pre>
+                <pre> end execution of program            </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> REM comment                         </pre>
+                <pre> adds a comment                      </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> QUOTE                               </pre>
+                <pre> an inspirational quote              </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> HELP                                </pre>
+                <pre> you just ran this                   </pre>
+                <pre>-------------------------------------</pre>
+                <pre> Grammar:                            </pre>
+                <pre>-------------------------------------</pre>
+                <pre> line ::= number stmt (: stmt)* NL   </pre>
+                <pre>       |  stmt (: stmt)* NL          </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> stmt ::=  see 'usage' above         </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> cmd  ::=  one of the commands above </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> expr-list ::=  expr (, expr)*       </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> var-list ::=  var (, var)*          </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> expr     ::=  term ((+|-) term)*    </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> term    ::=  factor ((*|/) factor)* </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> factor ::=  var | number            </pre>
+                <pre>         |   string | (expr)         </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> var    ::=  A | B | C ... | Y | Z   </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> number ::=  (+|-|eps) digit digit*  </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> digit  ::=  0 | 1 | 2 | ... | 9     </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> relop  ::=  &lt; (&gt;eps)                </pre>
+                <pre>         |   &gt; (&lt;|=|eps) | =         </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> string ::=  " string-char* "        </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> string-char ::=  non-quote/newline  </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> comment     ::=  non-newline        </pre>
+                <pre>- - - - - - - - - - - - - - - - - - -</pre>
+                <pre> eps         ::=  nothing            </pre>
+                <pre>-------------------------------------</pre>
+                <pre> This BASIC interpreter is loosely   </pre>
+                <pre> based on Dennis Allison's Tiny      </pre>
+                <pre> BASIC                               </pre>
+                <pre> Most of the above grammar is taken  </pre>
+                <pre> from <a target="_blank" href="https://archive.org/download/dr_dobbs_journal_vol_01/dr_dobbs_journal_vol_01.pdf">page 9 of Dr. Dobb's Journal</a>   </pre>
+                <pre> Source code is available at <a target="_blank" href="https://github.com/danieltuveson/10klob">here</a>    </pre>
+                <pre> and <a target="_blank" href="https://github.com/danieltuveson/dbi">here</a>                            </pre>
+                <pre> Happy hacking!                      </pre>
+                <br>
+                <pre> [press any key to continue]         </pre>
+                <br>
+            </div>
+
+            <div id="big-help">
+                <pre>--------------------------------------------------------------------------------</pre>
+                <pre> With the exception of RUN, HELP, and QUOTE, all commands must be prefixed with </pre>
+                <pre> a line number.                                                                 </pre>
+                <pre>--------------------------------------------------------------------------------</pre>
+                <pre> command |  description                        |  usage                         </pre>
+                <pre>---------+-------------------------------------+--------------------------------</pre>
+                <pre> PRINT   |  print concatenated expression list |  PRINT expr-list               </pre>
+                <pre> IF      |  conditionally execute statement    |  IF expr relop expr THEN stmt  </pre>
+                <pre> GOTO    |  jump to given line number          |  GOTO expr                     </pre>
+                <pre> LET     |  set variable to expression         |  LET var = expr                </pre>
+                <pre> GOSUB   |  jump to given line number          |  GOSUB expr                    </pre>
+                <pre> RETURN  |  return to the line following       |  RETURN                        </pre>
+                <pre>         |  the last GOSUB called              |  RETURN                        </pre>
+                <pre> RUN     |  execute loaded code                |  RUN                           </pre>
+                <pre> END     |  end execution of program           |  END                           </pre>
+                <pre> REM     |  adds a comment                     |  REM comment                   </pre>
+                <pre> QUOTE   |  an inspirational quote             |  QUOTE                         </pre>
+                <pre> HELP    |  you just ran this                  |  HELP                          </pre>
+                <pre>--------------------------------------------------------------------------------</pre>
+                <pre> line         ::=  number stmt (: stmt)* NL | stmt (: stmt)* NL                 </pre>
+                <pre> stmt         ::=  see 'usage' above                                            </pre>
+                <pre> cmd          ::=  one of the commands above                                    </pre>
+                <pre> expr-list    ::=  expr (, expr)*                                               </pre>
+                <pre> var-list     ::=  var (, var)*                                                 </pre>
+                <pre> expr         ::=  term ((+|-) term)*                                           </pre>
+                <pre> term         ::=  factor ((*|/) factor)*                                       </pre>
+                <pre> factor       ::=  var | number | string | (expr)                               </pre>
+                <pre> var          ::=  A | B | C ... | Y | Z                                        </pre>
+                <pre> number       ::=  (+|-|eps) digit digit*                                       </pre>
+                <pre> digit        ::=  0 | 1 | 2 | 3 | ... | 8 | 9                                  </pre>
+                <pre> relop        ::=  &lt; (&gt;eps) | &gt; (&lt;|=|eps) | =                                   </pre>
+                <pre> string       ::=  " string-char* "                                             </pre>
+                <pre> string-char  ::=  non-quote, non-newline character                             </pre>
+                <pre> comment      ::=  non-newline character                                        </pre>
+                <pre> eps          ::=  nothing                                                      </pre>
+                <pre>--------------------------------------------------------------------------------</pre>
+                <pre> This BASIC interpreter is loosely based on Dennis Allison's Tiny BASIC         </pre>
+                <pre> Most of the above grammar is taken from <a target="_blank" href="https://archive.org/download/dr_dobbs_journal_vol_01/dr_dobbs_journal_vol_01.pdf">page 9 of Dr. Dobb's Journal</a>           </pre>
+                <pre> Source code is available at <a target="_blank" href="https://github.com/danieltuveson/10klob">https://github.com/danieltuveson/10klob</a>            </pre>
+                <pre> and <a target="_blank" href="https://github.com/danieltuveson/dbi">https://github.com/danieltuveson/dbi</a>                                       </pre>
+                <pre> Happy hacking!                                                                 </pre>
+                <br>
+                <pre> [press any key to continue]                                                    </pre>
+            </div>
         </div>
         <div id="quote" class="splashscreen" hidden>
-            <p>
-            “It is practically impossible to teach good programming to students<br>
-            that have had a prior exposure to BASIC: as potential programmers<br>
-            they are mentally mutilated beyond hope of regeneration.”<br>
-            ― Edsger Dijkstra<br>
+            <p>“It is practically impossible to teach good programming to students
+            that have had a prior exposure to BASIC: as potential programmers
+            they are mentally mutilated beyond hope of regeneration.”
+            <br>
+            ― Edsger Dijkstra
             </p>
         </div>
         <div id="intro" class="splashscreen">
             <div>
-            <p>Run 'help' for a list of commands</p>
-            <p>[press any key to continue]</p>
+                <p>Run 'help' for a list of commands</p>
+                <p>[press any key to continue]</p>
             </div>
         </div>
-        <h1 id="title">10,000 Lines of Tiny BASIC</h2>
+        <h1 id="title">10,000 Lines of BASIC</h2>
         <div class="container">
-            <div id="code" class="pane" tabindex="-1">
-                <pre tabindex="-1"></pre>
-            </div>
-            <div id="stdout" class="pane" tabindex="-1">
-                <pre tabindex="-1">hi</pre>
-            </div>
+            <div id="code" class="pane" tabindex="-1"></div>
+            <div id="stdout" class="pane" tabindex="-1"></div>
             <div id="stdin-pane" tabindex="-1">
                 <span>&gt; </span>
                 <span contenteditable id="stdin" type="text" spellcheck="false"></span><span id="cursor">█</span>

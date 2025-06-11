@@ -11,6 +11,10 @@ html, body {
     padding: 0;
 }
 
+pre {
+    margin: 0;
+}
+
 .splashscreen {
     padding-top: 0px;
     position: absolute;
@@ -19,7 +23,7 @@ html, body {
     padding-top: 100px;
     text-align: center;
     width: 100vw;
-    background: rgb(0 0 0 / 80%);
+    background: rgb(0 0 0 / 85%);
 }
 
 .splashscreen * {
@@ -27,15 +31,27 @@ html, body {
 }
 
 #help {
+    padding: 0;
     height: 95vh;
-    width: calc(100vw - 30%);
-    padding-top: 0;
-    padding-left: 30vw;
-    align-items: center;
 }
 
 #help pre {
-    text-align: left;
+    text-align: center;
+}
+
+#quote {
+    display: flex;
+    justify-content: center;
+}
+
+#quote > p {
+    padding: 10px;
+    max-width: 500px;
+}
+
+/* for some reason we need this since #quote is a flexbox otherwise the p will be visible */
+[hidden] {
+    display: none !important;
 }
 
 h1 {
@@ -47,24 +63,45 @@ h1 {
     display: grid;
     grid-template-columns: 50% 50%;
 }
+
 .pane {
     border-top: 1px solid white;
     padding: 8px 0;
     padding-left: 10px;
-    overflow-y: scroll;
-    height: 80vh;
+    overflow-y: hidden;
     scrollbar-color: black black;
 }
 
-#code {
-    border-right: 1px solid white;
+@media (width <= 800px) {
+    #big-help {
+        display: none;
+    }
 }
 
-#code pre {
-    margin: 0;
+@media (width > 800px) {
+    #little-help {
+        display: none;
+    }
 }
 
-#stdout pre {
+@media (width <= 1000px) {
+    .pane {
+        grid-column-start: 1;
+        grid-column-end: 3;
+        height: 35vh;
+    }
+}
+
+@media (width > 1000px) {
+    .pane {
+        height: 80vh;
+    }
+    #code {
+        border-right: 1px solid white;
+    }
+}
+
+#stdout {
     margin: 0;
     display: flex;
     flex-direction: column-reverse;
