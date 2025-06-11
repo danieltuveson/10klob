@@ -6,7 +6,7 @@ objects = 10klob.o dbi.o
 	cc $(CFLAGS) $(objects) -o 10klob $(LDFLAGS)
 
 dbi.o:
-	@git clone "git@github.com:danieltuveson/dbi.git"
+	@git clone "https://github.com/danieltuveson/dbi"
 	@sed -i "s/DBI_DISABLE_IO 0/DBI_DISABLE_IO 1/g" dbi/dbi.h
 	@sudo $(MAKE) -C dbi 
 	@cd ..
