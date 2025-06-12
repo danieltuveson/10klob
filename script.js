@@ -1,19 +1,44 @@
 "use strict";
 
-let introScreen = true;
-let helpScreen = false;
-let quoteScreen = false;
+let REFRESH_RATE = 1000;
+let SLEEP_WHEN   = 20000;
+
+let isSplashscreen = true;
+let currentLine = 1;
 
 let cursor = document.getElementById("cursor");
 
 let cursorInterval = setInterval(toggleCursor, 500);
-// let codeInterval = setInterval(updateCode, 1000);
-// let stdoutInterval = setInterval(updateStdout, 1000);
 
-async function updateCode(lineno) {
+let codeInterval;
+let stdoutInterval;
+let sleepTimeout;
+
+function setRefresh() {
+    codeInterval = setInterval(updateCode, REFRESH_RATE);
+    stdoutInterval = setInterval(updateStdout, REFRESH_RATE);
+}
+
+// If idle for too long, stop spamming web server
+function gotoSleep() {
+    if (!isSplashscreen) {
+        let sleep = document.querySelector("#sleep");
+        sleep.removeAttribute("hidden");
+    }
+    clearInterval(codeInterval);
+    clearInterval(stdoutInterval);
+    clearTimeout(sleepTimeout);
+
+    sleepTimeout = null;
+    codeInterval = null;
+    stdoutInterval = null;
+    isSplashscreen = true;
+}
+
+async function updateCode() {
     let code = document.querySelector("#code");
-    console.log("lineno:", lineno);
-    const response = await fetch(`./code?lineno=${lineno}`, { method: "GET" });
+    console.log("currentLine:", currentLine);
+    const response = await fetch(`./code?lineno=${currentLine}`, { method: "GET" });
     let output = await decodeChunks(response);
     if (response.ok) {
         writeOutputToDiv(code, output);
@@ -41,15 +66,28 @@ function writeOutputToDiv(node, output) {
         node.appendChild(lineNode);
     });
 }
+
+function wakeUp() {
+    clearTimeout(sleepTimeout);
+    sleepTimeout = setTimeout(gotoSleep, SLEEP_WHEN);
+    if (!codeInterval) {
+        setRefresh();
+    }
+}
+
 addEventListener("click", function (e) {
+    wakeUp();
     hideSplashpages();
     forceTerminalFocus();
 });
 
 addEventListener("load", async function(event) {
-    await updateCode(1);
+    await updateCode();
     await updateStdout();
     forceTerminalFocus();
+    setRefresh();
+    clearTimeout(sleepTimeout);
+    sleepTimeout = setTimeout(gotoSleep, SLEEP_WHEN);
 });
 
 // TODO: Make it so fake cursor follows real one if user uses arrow keys to navigate
@@ -59,7 +97,8 @@ function toggleCursor(e) {
 }
 
 addEventListener("keypress", async function(event) {
-    if (introScreen || helpScreen || quoteScreen) {
+    wakeUp();
+    if (isSplashscreen) {
         event.preventDefault();
         hideSplashpages();
         return;
@@ -78,11 +117,10 @@ addEventListener("keypress", async function(event) {
 
 function hideSplashpages() {
     document.getElementById("intro").setAttribute("hidden", "true");
-    introScreen = false;
     document.getElementById("help").setAttribute("hidden", "true");
-    helpScreen = false;
     document.getElementById("quote").setAttribute("hidden", "true");
-    quoteScreen = false;
+    document.getElementById("sleep").setAttribute("hidden", "true");
+    isSplashscreen = false;
 }
 
 async function handleCommand() {
@@ -98,11 +136,11 @@ async function handleCommand() {
     if (cleanText === "help") {
         let help = document.getElementById("help");
         help.removeAttribute("hidden");
-        helpScreen = true;
+        isSplashscreen = true;
     } else if (cleanText === "quote") {
         let quote = document.getElementById("quote");
         quote.removeAttribute("hidden");
-        quoteScreen = true;
+        isSplashscreen = true;
     } else if (cleanText === "run") {
         let response = await fetch("./run", { method: "POST" });
         console.log(await decodeChunks(response));
@@ -125,15 +163,29 @@ async function handleCommand() {
             // context for the surrounding code
             lineno -= 8;
         }
-        await updateCode(lineno);
+        currentLine = lineno;
+        await updateCode();
     }
+}
+
+async function* streamAsyncIterable(stream) {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      yield value;
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 async function decodeChunks(response) {
     let lines = [];
     let decoder = new TextDecoder();
     let decoded;
-    for await (const chunk of response.body) {
+    for await (const chunk of streamAsyncIterable(response.body)) {
         decoded = decoder.decode(chunk);
         lines.push(decoded);
     }
