@@ -63,7 +63,7 @@ static void ringbuffer_printf(const char *fmt, ...)
 
     // printf("%d\n", global_ringbuffer.offset);
     global_ringbuffer.offset++;
-    if (global_ringbuffer.offset >= RINGBUFFER_SIZE) {
+    if (global_ringbuffer.offset >= RINGBUFFER_SIZE - 1) {
         global_ringbuffer.offset = 0;
     }
 }

@@ -2,7 +2,7 @@ CFLAGS = -O2 -g -Wall -Wextra
 LDFLAGS = -levent 
 objects = 10klob.o dbi.o
 
-10klob: $(objects) 
+10klob: $(objects) code.bas
 	cc $(CFLAGS) $(objects) -o 10klob $(LDFLAGS)
 
 dbi.o:
@@ -17,6 +17,9 @@ dbi.o:
 # Installs deps on Debian
 deps:
 	@sudo apt-get install libevent-dev
+
+code.bas: init.bas
+	@cp init.bas code.bas
 
 clean:
 	rm -f 10klob *.o *.a
