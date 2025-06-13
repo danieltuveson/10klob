@@ -8,7 +8,6 @@ objects = 10klob.o dbi.o
 dbi.o:
 	@git clone "https://github.com/danieltuveson/dbi"
 	@sed -i "s/DBI_DISABLE_IO 0/DBI_DISABLE_IO 1/g" dbi/dbi.h
-	@sed -i "s/DBI_DISABLE_IO 0/DBI_DISABLE_IO 1/g" dbi/dbi.h
 	# Tweak limit as needed
 	@sed -i "s/DBI_MAX_ITERATIONS 999999/DBI_MAX_ITERATIONS 999999/g" dbi/dbi.h
 	@sudo $(MAKE) -C dbi 
