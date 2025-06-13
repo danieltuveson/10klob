@@ -75,11 +75,15 @@ function wakeUp() {
     }
 }
 
-addEventListener("click", function (e) {
+function clique(e) {
     wakeUp();
     hideSplashpages();
     forceTerminalFocus();
-});
+}
+
+addEventListener("touchend", clique);
+
+addEventListener("click", clique);
 
 addEventListener("load", async function(event) {
     await updateCode();
