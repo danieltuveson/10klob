@@ -207,7 +207,8 @@ void route_get_code(struct evhttp_request *req, void *ctx)
             evbuffer_add_printf(reply, err, lineno_str);
             evhttp_send_reply(req, HTTP_BADREQUEST, NULL, reply);
         } else {
-            route_log("GET: lineno: %d", lineno);
+            // Shouldn't log this since it happens constantly
+            // route_log("GET: lineno: %d", lineno);
             evbuffer_expand(reply, 150 * DBI_MAX_LINE_LENGTH);
             for (int i = lineno; i < TEN_K; i++) {
                 char *line = dbi_get_line(global_prog, i);
@@ -241,7 +242,6 @@ static struct evkeyvalq *setup_post(struct evhttp_request *req)
     memset(post_body, 0, MAX_FORM_QUERY_STRING-1);
     ev_ssize_t readlen = evbuffer_copyout(buf, post_body, MAX_FORM_QUERY_STRING-1);
     route_log("POST: readlen %d", (int) readlen);
-    route_log("POST: MAX-1 %d", MAX_FORM_QUERY_STRING-1);
     if (readlen == -1 || readlen == MAX_FORM_QUERY_STRING-1) {
         route_log("POST failure: could not read query");
         return NULL;
@@ -256,6 +256,16 @@ static struct evkeyvalq *setup_post(struct evhttp_request *req)
         return NULL;
     }
     return params;
+}
+
+void get_ip_addr(char **ipaddr, ev_uint16_t *port, struct evhttp_request *req)
+{
+    struct evhttp_connection *conn = evhttp_request_get_connection(req);
+    if (!conn) {
+        route_log("POST failure: Could not get connection");
+        return;
+    }
+    evhttp_connection_get_peer(conn, ipaddr, port);
 }
 
 void route_post_code(struct evhttp_request *req, void *ctx)
@@ -280,7 +290,10 @@ void route_post_code(struct evhttp_request *req, void *ctx)
             printf("%s", dbi_strerror());
             evbuffer_add_printf(reply, "%s", dbi_strerror());
         } else {
-            fprintf(global_command_log, "%s\n", line);
+            char *ipaddr = "";
+            ev_uint16_t port = 0;
+            get_ip_addr(&ipaddr, &port, req);
+            fprintf(global_command_log, "%s : rem IP: %s:%u\n", line, ipaddr, port);
             evbuffer_add_printf(reply, "all gucci");
         }
         evhttp_send_reply(req, HTTP_OK, NULL, reply);
