@@ -1,8 +1,8 @@
 10klob
+code.bas
+command_log.bas
 *.o
 *.a
 *.swp
 *.dSYM
-command_log.bas
-code.bas
 
