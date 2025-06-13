@@ -1,3 +1,4 @@
+// *** DO NOT MANUALLY EDIT THIS FILE ***
 #ifndef DBI_H
 #define DBI_H
 

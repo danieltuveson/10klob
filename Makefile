@@ -8,10 +8,13 @@ objects = 10klob.o dbi.o
 dbi.o:
 	@git clone "https://github.com/danieltuveson/dbi"
 	@sed -i "s/DBI_DISABLE_IO 0/DBI_DISABLE_IO 1/g" dbi/dbi.h
+	@sed -i "s/DBI_DISABLE_IO 0/DBI_DISABLE_IO 1/g" dbi/dbi.h
+	# Tweak limit as needed
+	@sed -i "s/DBI_MAX_ITERATIONS 999999/DBI_MAX_ITERATIONS 999999/g" dbi/dbi.h
 	@sudo $(MAKE) -C dbi 
 	@cd ..
 	@cp dbi/dbi.o . 
-	@cp dbi/dbi.h . 
+	@echo "// *** DO NOT MANUALLY EDIT THIS FILE ***" > dbi.h && cat dbi/dbi.h >> dbi.h
 	@rm -rf dbi
 
 # Installs deps on Debian
@@ -23,5 +26,5 @@ code.bas: init.bas
 
 clean:
 	rm -f 10klob *.o *.a
-	rm -rf dbi
+	rm -rf dbi dbi.h
 

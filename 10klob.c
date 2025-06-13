@@ -109,7 +109,7 @@ static void route_log(const char *fmt, ...)
 
 void route_404_notfound(struct evhttp_request *req, void *ctx)
 {
-    route_log("ROUTE: 404 - not found");
+    route_log("404 - not found");
     IGNORE(ctx);
     struct evbuffer *reply = evbuffer_new();
     struct evkeyvalq *headers = evhttp_request_get_output_headers(req);
@@ -123,7 +123,7 @@ void route_index(struct evhttp_request *req, void *ctx)
 {
     enum evhttp_cmd_type req_type = evhttp_request_get_command(req);
     if (req_type != EVHTTP_REQ_GET) {
-        route_log("ROUTE: index - bad request type");
+        route_log("index - bad request type");
         route_404_notfound(req, ctx);
         return;
     }
@@ -139,7 +139,7 @@ void route_static(struct evhttp_request *req, void *ctx, char *mime_type, struct
 {
     enum evhttp_cmd_type req_type = evhttp_request_get_command(req);
     if (req_type != EVHTTP_REQ_GET) {
-        route_log("ROUTE: index - bad request type");
+        route_log("index - bad request type");
         route_404_notfound(req, ctx);
         return;
     }
@@ -270,6 +270,7 @@ void get_ip_addr(char **ipaddr, ev_uint16_t *port, struct evhttp_request *req)
 
 void route_post_code(struct evhttp_request *req, void *ctx)
 {
+    route_log("post code");
     struct evbuffer *reply = evbuffer_new();
     struct evkeyvalq *params = setup_post(req);
     if (!params) {
@@ -287,7 +288,6 @@ void route_post_code(struct evhttp_request *req, void *ctx)
         route_log("POST: line: %s", line);
         bool ret = dbi_compile_string(global_prog, (char *)line);
         if (!ret) {
-            printf("%s", dbi_strerror());
             evbuffer_add_printf(reply, "%s", dbi_strerror());
         } else {
             char *ipaddr = "";
@@ -306,7 +306,7 @@ void route_stdout(struct evhttp_request *req, void *ctx)
 {
     enum evhttp_cmd_type req_type = evhttp_request_get_command(req);
     if (req_type != EVHTTP_REQ_GET) {
-        route_log("ROUTE: stdout - bad request type");
+        route_log("stdout - bad request type");
         route_404_notfound(req, ctx);
         return;
     }
@@ -318,9 +318,11 @@ void route_stdout(struct evhttp_request *req, void *ctx)
     evbuffer_expand(reply, RINGBUFFER_SIZE * OUTPUT_LINE_SIZE);
 
     for (int i = (int)global_ringbuffer.offset; i >= 0; i--) {
+        // printf("%d:%s\n", i, global_ringbuffer.buffers[i]);
         evbuffer_add_printf(reply, "%s", global_ringbuffer.buffers[i]);
     }
     for (int i = RINGBUFFER_SIZE - 1; i > ((int)global_ringbuffer.offset); i--) {
+        // printf("%d:%s\n", i, global_ringbuffer.buffers[i]);
         evbuffer_add_printf(reply, "%s", global_ringbuffer.buffers[i]);
     }
     evhttp_send_reply(req, HTTP_OK, NULL, reply);
@@ -331,7 +333,7 @@ void route_run(struct evhttp_request *req, void *ctx)
 {
     enum evhttp_cmd_type req_type = evhttp_request_get_command(req);
     if (req_type != EVHTTP_REQ_POST) {
-        route_log("ROUTE: run - bad request type");
+        route_log("run - bad request type");
         route_404_notfound(req, ctx);
         return;
     }
@@ -341,20 +343,21 @@ void route_run(struct evhttp_request *req, void *ctx)
 
     struct evbuffer *reply = evbuffer_new();
 
-    printf("running program\n");
+    route_log("run - running program");
     global_dbi = dbi_runtime_new();
     enum DbiStatus ret = dbi_run(global_dbi, global_prog);
     if (ret == DBI_STATUS_ERROR) {
         ringbuffer_printf("%s", dbi_strerror());
-        evbuffer_add_printf(reply, "%s", dbi_strerror());
+        ringbuffer_printf("\n");
+        evbuffer_add_printf(reply, "%s\n", dbi_strerror());
     } else {
-        evbuffer_add_printf(reply, "%s", "all good");
+        evbuffer_add_printf(reply, "all good");
     }
     dbi_runtime_free(global_dbi);
 
     evhttp_send_reply(req, HTTP_OK, NULL, reply);
     evbuffer_free(reply);
-    printf("done\n");
+    route_log("run - done");
 }
 
 void route_code(struct evhttp_request *req, void *ctx)
@@ -365,7 +368,7 @@ void route_code(struct evhttp_request *req, void *ctx)
     } else if (req_type == EVHTTP_REQ_POST) {
         route_post_code(req, ctx);
     } else {
-        route_log("ROUTE: code - bad request type");
+        route_log("code - bad request type");
         route_404_notfound(req, ctx);
         return;
     }
