@@ -26,8 +26,8 @@
 #endif
 
 #ifndef RINGBUFFER_SIZE
-// #define RINGBUFFER_SIZE 10
-#define RINGBUFFER_SIZE 150
+// #define RINGBUFFER_SIZE 20
+#define RINGBUFFER_SIZE 300
 #endif
 
 #ifndef OUTPUT_LINE_SIZE
@@ -61,10 +61,18 @@ static void ringbuffer_printf(const char *fmt, ...)
     vsnprintf(global_ringbuffer.buffers[global_ringbuffer.offset], OUTPUT_LINE_SIZE, fmt, args);
     va_end(args);
 
-    // printf("%d\n", global_ringbuffer.offset);
     global_ringbuffer.offset++;
-    if (global_ringbuffer.offset >= RINGBUFFER_SIZE - 1) {
+    assert(global_ringbuffer.offset <= RINGBUFFER_SIZE);
+
+    if (global_ringbuffer.offset == RINGBUFFER_SIZE) {
         global_ringbuffer.offset = 0;
+    }
+}
+
+static void ringbuffer_clear(struct RingBuffer *ringbuffer)
+{
+    for (int i = 0; i < RINGBUFFER_SIZE; i++) {
+        memset(ringbuffer->buffers[i], 0, OUTPUT_LINE_SIZE);
     }
 }
 
@@ -317,12 +325,10 @@ void route_stdout(struct evhttp_request *req, void *ctx)
     struct evbuffer *reply = evbuffer_new();
     evbuffer_expand(reply, RINGBUFFER_SIZE * OUTPUT_LINE_SIZE);
 
-    for (int i = (int)global_ringbuffer.offset; i >= 0; i--) {
-        // printf("%d:%s\n", i, global_ringbuffer.buffers[i]);
+    for (int i = ((int)global_ringbuffer.offset) - 1; i >= 0; i--) {
         evbuffer_add_printf(reply, "%s", global_ringbuffer.buffers[i]);
     }
-    for (int i = RINGBUFFER_SIZE - 1; i > ((int)global_ringbuffer.offset); i--) {
-        // printf("%d:%s\n", i, global_ringbuffer.buffers[i]);
+    for (int i = RINGBUFFER_SIZE - 1; i >= ((int)global_ringbuffer.offset); i--) {
         evbuffer_add_printf(reply, "%s", global_ringbuffer.buffers[i]);
     }
     evhttp_send_reply(req, HTTP_OK, NULL, reply);
@@ -344,11 +350,11 @@ void route_run(struct evhttp_request *req, void *ctx)
     struct evbuffer *reply = evbuffer_new();
 
     route_log("run - running program");
+    // ringbuffer_clear(&global_ringbuffer);
     global_dbi = dbi_runtime_new();
     enum DbiStatus ret = dbi_run(global_dbi, global_prog);
     if (ret == DBI_STATUS_ERROR) {
-        ringbuffer_printf("%s", dbi_strerror());
-        ringbuffer_printf("\n");
+        ringbuffer_printf("%s\n", dbi_strerror());
         evbuffer_add_printf(reply, "%s\n", dbi_strerror());
     } else {
         evbuffer_add_printf(reply, "all good");
