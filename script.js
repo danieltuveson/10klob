@@ -1,7 +1,7 @@
 "use strict";
 
 let REFRESH_RATE = 1000;
-let SLEEP_WHEN   = 20000;
+let SLEEP_WHEN   = 50000;
 
 let isSplashscreen = true;
 let currentLine = 1;
